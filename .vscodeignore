@@ -1,0 +1,10 @@
+.vscode/**
+.github/**
+test/**
+src/**
+node_modules/**
+*.ts
+tsconfig.json
+package-lock.json
+nightshade-inline.vsix
+**/.DS_Store

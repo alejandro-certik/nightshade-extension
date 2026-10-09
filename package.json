@@ -1,0 +1,113 @@
+{
+  "name": "nightshade-inline",
+  "displayName": "Nightshade Inline Review",
+  "description": "Run Nightshade static analysis and show Compact findings as inline VS Code diagnostics.",
+  "version": "0.1.4",
+  "publisher": "nightshade-local",
+  "license": "Apache-2.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alejandro-certik/nightshade-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alejandro-certik/nightshade-extension/issues"
+  },
+  "homepage": "https://github.com/alejandro-certik/nightshade-extension#readme",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:compact",
+    "workspaceContains:**/*.compact",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "compact",
+        "aliases": ["Compact", "compact"],
+        "extensions": [".compact"]
+      }
+    ],
+    "commands": [
+      {
+        "command": "nightshade.scanFile",
+        "title": "Nightshade: Scan Current Compact File"
+      },
+      {
+        "command": "nightshade.scanWorkspace",
+        "title": "Nightshade: Scan Workspace"
+      },
+      {
+        "command": "nightshade.clearDiagnostics",
+        "title": "Nightshade: Clear Inline Results"
+      }
+    ],
+    "configuration": {
+      "title": "Nightshade",
+      "properties": {
+        "nightshade.dockerPath": {
+          "type": "string",
+          "default": "docker",
+          "description": "Path or command used to start Docker."
+        },
+        "nightshade.dockerImage": {
+          "type": "string",
+          "default": "nightshade",
+          "description": "Local Docker image that provides the Nightshade CLI."
+        },
+        "nightshade.compilerVersion": {
+          "type": "string",
+          "default": "0.31.1",
+          "enum": ["0.28.0", "0.29.0", "0.30.0", "0.31.1", "0.33.0-rc.2", "0.34.0", "0.35.0-rc.1", "0.35.0"],
+          "description": "Nightshade analysis profile. Match the Compact compiler used by the project."
+        },
+        "nightshade.maxPaths": {
+          "type": "integer",
+          "default": 1024,
+          "minimum": 1,
+          "description": "Maximum abstract execution paths Nightshade may analyze per rule."
+        },
+        "nightshade.maxSteps": {
+          "type": "integer",
+          "default": 160000,
+          "minimum": 1,
+          "description": "Maximum abstract execution steps Nightshade may analyze per rule."
+        },
+        "nightshade.runOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan a Compact file after it is saved."
+        },
+        "nightshade.scanWorkspaceOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scan an opened workspace folder when it contains Compact files."
+        },
+        "nightshade.scanOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scan a Compact file when it is opened."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "npm run compile && node --test test/*.test.cjs",
+    "watch": "tsc -watch -p .",
+    "package": "npm run compile && vsce package --out nightshade-inline.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.6.1",
+    "typescript": "~5.9.3"
+  }
+}
