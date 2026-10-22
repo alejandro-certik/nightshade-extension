@@ -2,7 +2,7 @@ name: Test, package, and release
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
     tags: ["v*"]
   pull_request:
     branches: [main]
@@ -41,9 +41,22 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  release-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install latest Nightshade and scan positive/negative controls
+        run: npm run test:release
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: test-and-package
+    needs: [test-and-package, release-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write
