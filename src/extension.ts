@@ -1,6 +1,6 @@
-import * as childProcess from "node:child_process";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { NightshadeInstaller, runCommand } from "./installer";
 import { containerRoot, normalize, quote, scanKey, toHostPath } from "./scan-utils";
 
 interface Location {
@@ -36,6 +36,7 @@ const source = "Nightshade";
 
 let collection: vscode.DiagnosticCollection;
 let output: vscode.OutputChannel;
+let installer: NightshadeInstaller;
 const pendingScans = new Map<string, NodeJS.Timeout>();
 const scanResults = new Map<string, Map<string, vscode.Diagnostic[]>>();
 const scanGenerations = new Map<string, number>();
@@ -48,6 +49,30 @@ export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel("Nightshade");
   context.subscriptions.push(collection, output);
   output.appendLine("Nightshade extension activated.");
+  installer = new NightshadeInstaller(context.globalStorageUri.fsPath, {
+    log: message => output.appendLine(message),
+    progress: task => Promise.resolve(vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: "Installing Nightshade from GitHub Releases — see Nightshade output for progress",
+      cancellable: false
+    }, task))
+  });
+
+  context.subscriptions.push(vscode.commands.registerCommand("nightshade.installAnalyzer", async () => {
+    if (!vscode.workspace.isTrusted) return;
+    output.show(true);
+    const config = vscode.workspace.getConfiguration("nightshade");
+    try {
+      await installer.ensure({
+        docker: config.get<string>("dockerPath", "docker"),
+        image: config.get<string>("dockerImage", "nightshade"),
+        autoInstall: true
+      }, true);
+      void vscode.window.showInformationMessage("Nightshade is ready. Run Scan Workspace to refresh findings.");
+    } catch (error) {
+      reportFailure(error);
+    }
+  }));
 
   context.subscriptions.push(vscode.commands.registerCommand("nightshade.scanFile", async () => {
     const editor = vscode.window.activeTextEditor;
@@ -177,16 +202,13 @@ async function scanFile(uri: vscode.Uri, revealOutput: boolean): Promise<void> {
 }
 
 async function scan(hostRoot: string, target: string, revealOutput: boolean): Promise<void> {
+  if (!vscode.workspace.isTrusted) return;
   const config = vscode.workspace.getConfiguration("nightshade");
   const docker = config.get<string>("dockerPath", "docker");
-  const image = config.get<string>("dockerImage", "nightshade");
   const compilerVersion = config.get<string>("compilerVersion", "0.31.1");
   const maxPaths = config.get<number>("maxPaths", 1024);
   const maxSteps = config.get<number>("maxSteps", 160000);
-  const args = [
-    "run", "--rm",
-    "-v", `${hostRoot}:${containerRoot}:ro`,
-    image,
+  const scanArgs = [
     target,
     "--compiler-version", compilerVersion,
     "--max-paths", String(maxPaths),
@@ -197,11 +219,20 @@ async function scan(hostRoot: string, target: string, revealOutput: boolean): Pr
   const generation = (scanGenerations.get(key) ?? 0) + 1;
   scanGenerations.set(key, generation);
 
-  output.appendLine(`\n$ ${docker} ${args.map(quote).join(" ")}`);
   if (revealOutput) output.show(true);
 
   try {
-    const { stdout, stderr, code } = await run(docker, args, hostRoot);
+    const image = await installer.ensure({
+      docker,
+      image: config.get<string>("dockerImage", "nightshade"),
+      autoInstall: config.get<boolean>("autoInstall", true)
+    });
+    if (scanGenerations.get(key) !== generation) return;
+    const args = ["run", "--rm", "--platform", "linux/amd64", "--network", "none",
+      "-v", `${hostRoot}:${containerRoot}:ro`, image, ...scanArgs];
+    output.appendLine(`\n$ ${docker} ${args.map(quote).join(" ")}`);
+    const { stdout, stderr, code } = await runCommand(docker, args, hostRoot);
+    if (![0, 1, 2].includes(code)) throw new Error(`Docker exited ${code}: ${stderr}`);
     if (stderr.trim()) output.appendLine(stderr.trim());
     const result = JSON.parse(stdout) as ScanResult;
     if (scanGenerations.get(key) !== generation) {
@@ -218,22 +249,15 @@ async function scan(hostRoot: string, target: string, revealOutput: boolean): Pr
       void vscode.window.showInformationMessage(`Nightshade complete: ${result.findings.length} finding(s).`);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    output.appendLine(`Nightshade failed: ${message}`);
-    void vscode.window.showErrorMessage("Nightshade could not run. See the Nightshade output channel.");
+    reportFailure(error);
   }
 }
 
-function run(command: string, args: string[], cwd: string): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    childProcess.execFile(command, args, { cwd, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
-      const code = typeof error?.code === "number" ? error.code : 0;
-      if (error && ![1, 2].includes(code)) {
-        reject(new Error(`${error.message}${stderr ? `\n${stderr}` : ""}`));
-        return;
-      }
-      resolve({ stdout, stderr, code });
-    });
+function reportFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  output.appendLine(`Nightshade failed: ${message}`);
+  void vscode.window.showErrorMessage(`Nightshade: ${message.split("\n")[0]}`, "Show Output").then(action => {
+    if (action) output.show(true);
   });
 }
 

@@ -27,6 +27,14 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "extensionKind": ["workspace"],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Nightshade downloads an analyzer and runs Docker; trust the workspace to enable scanning."
+    },
+    "virtualWorkspaces": false
+  },
   "contributes": {
     "languages": [
       {
@@ -36,6 +44,10 @@
       }
     ],
     "commands": [
+      {
+        "command": "nightshade.installAnalyzer",
+        "title": "Nightshade: Install / Update Analyzer"
+      },
       {
         "command": "nightshade.scanFile",
         "title": "Nightshade: Scan Current Compact File"
@@ -52,6 +64,12 @@
     "configuration": {
       "title": "Nightshade",
       "properties": {
+        "nightshade.autoInstall": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Install the latest stable GitHub release when the default Nightshade Docker image is missing. Requires a running Docker daemon."
+        },
         "nightshade.dockerPath": {
           "type": "string",
           "default": "docker",
@@ -60,7 +78,7 @@
         "nightshade.dockerImage": {
           "type": "string",
           "default": "nightshade",
-          "description": "Local Docker image that provides the Nightshade CLI."
+          "description": "Docker image to use. The default reuses a managed release or local nightshade image, and installs the latest stable release if missing. Custom images must be installed manually."
         },
         "nightshade.compilerVersion": {
           "type": "string",
@@ -101,6 +119,7 @@
   "scripts": {
     "compile": "tsc -p .",
     "test": "npm run compile && node --test test/*.test.cjs",
+    "test:release": "npm run compile && node test/release-smoke.cjs",
     "watch": "tsc -watch -p .",
     "package": "npm run compile && vsce package --out nightshade-inline.vsix"
   },
