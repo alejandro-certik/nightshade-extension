@@ -2,7 +2,7 @@
   "name": "nightshade-inline",
   "displayName": "Nightshade Inline Review",
   "description": "Run Nightshade static analysis and show Compact findings as inline VS Code diagnostics.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "nightshade-local",
   "license": "Apache-2.0",
   "private": true,
